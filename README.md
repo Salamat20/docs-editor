@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Docs Editor
 
-## Getting Started
+A lightweight collaborative document editor: create, edit, format, upload, and share documents.
 
-First, run the development server:
+Live demo: (add Vercel link here)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Features
+- Rich text editing with bold, italic, underline, headings (H1/H2), and bulleted/numbered lists
+- Create, rename, edit, and save documents (saved to a Postgres database)
+- Upload .txt or .md files, which become new editable documents
+- Share a document with another user; shared documents appear under "Shared with me"
+- Simulated login with three test users: Alice, Bob, Carol
+- Automated tests for the sharing rules and file conversion
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How to run locally
+1. Install Node.js (v20 or newer).
+2. Run `npm install`.
+3. Create a `.env.local` file with `DATABASE_URL=your-neon-postgres-connection-string`.
+4. Set up the database: `node --env-file=.env.local scripts/setup-db.mjs`
+5. Start the app: `npm run dev`, then open http://localhost:3000
+6. Run the tests: `npm test`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How to test sharing
+1. Log in as Alice, create a document, then share it with Bob.
+2. Log out and log in as Bob: the document appears under "Shared with me" and he can edit it.
+3. Log in as Carol and open the same document URL: she gets "Document not found."
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Architecture
+- Frontend: Next.js (App Router), React, TypeScript. The editor uses Tiptap.
+- Backend: Next.js API routes in `app/api/`.
+- Database: Neon serverless Postgres with three tables: `users`, `documents`, `document_shares`.
+- Access rules: `lib/access.ts` holds the logic (owner, editor, none), kept as plain functions so it is easy to test.
+- Documents are stored as HTML so formatting is preserved between sessions.
 
-## Learn More
+## Key decisions and tradeoffs
+- Simulated login (cookie-based user picker) instead of real auth, to focus time on the core editing and sharing features.
+- Shared users can view and edit; only the owner can share.
+- Users without access get "Document not found" (404) rather than "Forbidden", so the app doesn't reveal which documents exist.
+- Manual Save button instead of autosave, to keep save behavior simple and predictable.
+- Uploads limited to .txt and .md (max 1 MB). Plain text is HTML-escaped to prevent script injection; Markdown is converted with `marked`.
+- Next.js 16 Cache Components requires URL params inside a Suspense boundary, so the editor page is a small server wrapper around a client component.
 
-To learn more about Next.js, take a look at the following resources:
+## What I would add with more time
+- Real authentication (e.g. Auth.js) and password-protected accounts
+- Autosave and real-time collaboration (e.g. Yjs)
+- View-only sharing and the ability to remove access
+- .docx upload and export to PDF/Word
+- Server-side HTML sanitization of saved content
+- End-to-end tests (e.g. Playwright)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## How I used AI
+I used AI assistants to plan the build, generate starter code, and debug errors (for example, the Next.js 16 Suspense requirement and a dependency version conflict). I reviewed, tested, and adjusted the code myself, and verified behavior manually and with automated tests.

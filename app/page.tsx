@@ -1,69 +1,121 @@
-import Image from "next/image";
+"use client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+type Item = { id: string; title: string; updated_at: string; owner_id?: string };
+type User = { id: string; name: string };
+
+const box = { border: "1px solid #444", borderRadius: 8, padding: 16, marginBottom: 20 };
+const btn = { padding: "8px 14px", border: "1px solid #666", borderRadius: 6, cursor: "pointer", marginRight: 8 };
 
 export default function Home() {
+  const router = useRouter();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [owned, setOwned] = useState<Item[]>([]);
+  const [shared, setShared] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  // Load my documents; if not logged in, go to the login page
+  useEffect(() => {
+    fetch("/api/documents")
+      .then(async (res) => {
+        if (res.status === 401) return router.push("/login");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setUser(data.user);
+        setOwned(data.owned);
+        setShared(data.shared);
+      })
+      .catch(() => setError("Could not load documents."))
+      .finally(() => setLoading(false));
+  }, [router]);
+
+  async function createDoc() {
+    setBusy(true);
+    setError("");
+    const res = await fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Untitled document" }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (res.ok) router.push(`/docs/${data.id}`);
+    else setError(data.error || "Could not create document.");
+  }
+
+  async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so the same file can be picked again
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: form });
+    const data = await res.json();
+    setBusy(false);
+    if (res.ok) router.push(`/docs/${data.id}`);
+    else setError(data.error || "Upload failed.");
+  }
+
+  async function logout() {
+    await fetch("/api/login", { method: "DELETE" });
+    router.push("/login");
+  }
+
+  if (loading) return <main style={{ padding: 40, fontFamily: "sans-serif" }}>Loading…</main>;
+
+  const list = (items: Item[], empty: string, showOwner = false) =>
+    items.length === 0 ? (
+      <p style={{ opacity: 0.6 }}>{empty}</p>
+    ) : (
+      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        {items.map((d) => (
+          <li key={d.id} style={{ padding: "8px 0", borderBottom: "1px solid #333" }}>
+            <Link href={`/docs/${d.id}`} style={{ fontWeight: 600 }}>{d.title}</Link>
+            <span style={{ opacity: 0.6, fontSize: 13, marginLeft: 10 }}>
+              {showOwner && d.owner_id ? `by ${d.owner_id} · ` : ""}
+              edited {new Date(d.updated_at).toLocaleString()}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main style={{ maxWidth: 760, margin: "40px auto", padding: 16, fontFamily: "sans-serif" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26 }}>My documents</h1>
+        <div>
+          <span style={{ marginRight: 12, opacity: 0.8 }}>Signed in as {user?.name}</span>
+          <button onClick={logout} style={btn}>Log out</button>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </header>
+
+      <div style={{ marginBottom: 24 }}>
+        <button onClick={createDoc} disabled={busy} style={{ ...btn, opacity: busy ? 0.5 : 1 }}>+ New document</button>
+        <button onClick={() => fileInput.current?.click()} disabled={busy} style={{ ...btn, opacity: busy ? 0.5 : 1 }}>
+          Upload .txt / .md
+        </button>
+        <input ref={fileInput} type="file" accept=".txt,.md,.markdown" onChange={uploadFile} hidden />
+      </div>
+
+      {error && <p style={{ color: "crimson", marginBottom: 16 }}>{error}</p>}
+
+      <section style={box}>
+        <h2 style={{ fontSize: 18, marginBottom: 10 }}>Owned by me</h2>
+        {list(owned, "No documents yet. Create one or upload a file.")}
+      </section>
+
+      <section style={box}>
+        <h2 style={{ fontSize: 18, marginBottom: 10 }}>Shared with me</h2>
+        {list(shared, "Nothing shared with you yet.", true)}
+      </section>
+    </main>
   );
 }
